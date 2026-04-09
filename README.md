@@ -149,6 +149,46 @@ The practical concern is that `can-i-deploy` is a deployment gate. It makes a bi
 
 This doesn't mean every provider test needs a full production-like environment. It means the verification should exercise enough of the real code path that the status codes and response shapes in the pact reflect what the API would actually return. Where you draw that line is a judgement call — but drawing it *above* the business logic means the business logic is invisible to the contract.
 
+This isn't a novel position — it's what the Pact project itself recommends.
+
+## What Pact Themselves Recommend
+
+The official Pact documentation is explicit about where to draw the stubbing boundary during provider verification.
+
+### Only stub beneath request extraction
+
+From [Verifying Pacts](https://docs.pact.io/provider):
+
+> **"Only stub layers beneath where contents of the request body are extracted."**
+>
+> "If you don't have to stub anything in the Provider when running pact:verify, then don't. If you do need to stub something (eg. a downstream system), make sure that you only stub the code that gets executed **after** the contents of the request body have been extracted and validated. Otherwise, you could send any old garbage in a POST or PUT body, and no test would fail."
+
+In the blogging example, mocking `IPostRepository` stubs out the layer *where* the request is processed — not beneath it. The business rule (filter by `IsPublished`) sits inside the repository, and the mock replaces it entirely.
+
+### Verify against a real, locally running instance
+
+Also from [Verifying Pacts](https://docs.pact.io/provider):
+
+> "Pact is designed to give you confidence that your integration is working correctly before you deploy either application. To achieve this, the verification step must be run against a **locally running instance** of your provider."
+
+### Provider states should catch false positives
+
+From [Using provider states effectively](https://docs.pact.io/provider/using_provider_states_effectively):
+
+> "The purpose of contract testing is to ensure that the consumer and provider have a **shared understanding** of the messages that will pass between them."
+
+The docs then walk through a detailed example where a search endpoint ignores an incorrect query parameter, the provider state only seeds one matching record, and the test passes — giving a **false positive**. The recommended fix is to seed data that would expose the bug: add extra records so that if the filtering doesn't work, the test fails.
+
+This is exactly the same principle at play in our example. The mocked provider state returns a result that bypasses the filter. The real provider state seeds data that the filter acts on — and the bug is caught.
+
+### Stub downstream services, not your own logic
+
+From Beth Skurrie's [conceptual background gist](https://gist.github.com/bethesque/43eef1bf47afea4445c8b8bdebf28df0) (linked from the Pact docs):
+
+> "When you verify the A/B Pact, it's best to stub out the calls to C at some level."
+
+The guidance is to stub *external dependencies* (other services, databases) — not your own application logic. The repository in our example isn't a downstream service. It's the provider's own business logic.
+
 ## Reproducing
 
 ### Prerequisites
